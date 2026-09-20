@@ -1,26 +1,45 @@
 ---
-description: Route Cursor subagents through TypeSafe Jev and use jev_ask for typed judgments
+description: Route Cursor subagents through TypeSafe Jev, use jev_judge/jev_ask instead of deliberation, and keep agent loops short
 alwaysApply: true
 ---
 
-# Jev TypeSafe routing
+# Jev TypeSafe routing and speed
 
-Jev is TypeSafe's System One model. It is not a chat model and must not be used as a Cursor `model` ID. It classifies and scores; Cursor LLMs write code.
+Jev is TypeSafe's System One model. It is not a chat model and must not be used as a Cursor `model` ID. It classifies and scores in ~100ms; Cursor LLMs write code.
+
+The point of this plugin is to finish the user's request in fewer hops. A Task subagent is expensive. Nested Task is worse. Long chain-of-thought over a yes/no is worse than `jev_judge` / `jev_ask`.
+
+## Default: do the work yourself
+
+Do not launch `Task` unless the work is isolated enough that a subagent will be faster than continuing here. If a hook or `jev_route` says to stay inline, stay inline.
+
+Never launch Task from a subagent. Never launch a second Task in the same turn unless the two chunks are independent and both must run.
 
 ## Before launching a subagent
 
-A user hook already calls Jev on every `Task` tool use and may rewrite `subagent_type`. Do not set `model` to `jev`, `jev-latest`, or `typesafe-ai/jev`.
+A user hook already calls Jev on every `Task` tool use. It may rewrite `subagent_type`, inject a one-pass contract, or deny wasted hops. Do not set `model` to `jev`, `jev-latest`, or `typesafe-ai/jev`.
 
-If you need an explicit routing preview, call MCP `jev_route` with a short task summary (never secrets or a full transcript).
+If you need a routing preview, call MCP `jev_route` with a short task summary (never secrets or a full transcript).
 
-## Typed judgments
+## Preset gates (`jev_judge`)
 
-When a decision is a closed set, a yes/no, or a rubric score, call MCP `jev_ask` instead of prompt-and-parse:
+Call `jev_judge` instead of inventing questions:
 
-- `choice` — pick one option from criteria you define
-- `score` — rate against ordered levels
-- `noul` — probability that a statement is true (0–1)
+- `kind: "scope"` before a new file or extra refactor — if `action` is `skip`, do not write it
+- `kind: "pick"` when you have 2–8 candidate files or approaches — follow `pick`, do not read everything
+- `kind: "ready"` before saying you are done — if `action` is `stop`, hand the work back
+- `kind: "split"` at the start of a compound ask — if `action` is `split`, sequence the jobs in this agent; do not mix them
+
+A search hook already reranks Grep/Glob hits. Prefer those files; do not Read the rest of the shortlist unless the ask changed.
+
+Custom questions still go through `jev_ask` (`choice` / `score` / `noul`).
 
 Keep questions atomic. Combine answers in code. Do not send API keys, `.env` contents, credentials, or full chat transcripts as `state`.
+
+If Choice/Score confidence is low, do not guess — ask the user. Destructive shell already prompts the user via a hook when Jev is unsure.
+
+## Stop
+
+When the user ask is met, stop. Do not re-search, re-read, or spawn a "verify" subagent unless the user asked for a review (Bugbot / security-review).
 
 Authorize once in Cursor: Customize → Plugins → Jev → Configure, or run `node bin/cli.mjs set-key`, or call MCP `jev_auth`.

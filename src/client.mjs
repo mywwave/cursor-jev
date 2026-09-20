@@ -24,11 +24,17 @@ export async function systemOne({
   key,
   fetcher = fetch,
   model = MODEL,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  maxAttempts = RETRY_DELAYS_MS.length,
 }) {
   let lastReason = "TypeSafe request failed or timed out.";
+  const attempts = Math.max(1, Number(maxAttempts) || 1);
 
-  for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt++) {
-    if (RETRY_DELAYS_MS[attempt]) await sleep(RETRY_DELAYS_MS[attempt]);
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) {
+      const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)] || 400;
+      await sleep(delay);
+    }
     try {
       const response = await fetcher(SYSTEM_ONE_URL, {
         method: "POST",
@@ -36,7 +42,7 @@ export async function systemOne({
           Authorization: `Bearer ${key}`,
           "Content-Type": "application/json",
         },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
         body: JSON.stringify({ model, state, questions }),
       });
 

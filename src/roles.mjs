@@ -3,8 +3,29 @@
 export const MODEL = "jev-latest";
 export const CONFIDENCE_THRESHOLD = 0.7;
 export const SPECIALIST_NOUL_THRESHOLD = 0.5;
+export const DELEGATE_THRESHOLD = 0.4;
+export const FANOUT_THRESHOLD = 0.65;
+export const CONTINUE_THRESHOLD = 0.45;
 export const MAX_TASK_CHARS = 12000;
 export const REQUEST_TIMEOUT_MS = 15000;
+/** Hook path must not stall the agent. TypeSafe Choice is typically ~100ms. */
+export const HOOK_TIMEOUT_MS = 1800;
+export const HOOK_MAX_ATTEMPTS = 1;
+export const HOOK_TIMEOUT_SECONDS = 5;
+export const FANOUT_WINDOW_MS = 120000;
+export const SCOPE_DENY_THRESHOLD = 0.3;
+export const COMPOUND_THRESHOLD = 0.55;
+export const DESTRUCTIVE_THRESHOLD = 0.5;
+export const DESTRUCTIVE_ASK_THRESHOLD = 0.9;
+export const READY_STOP_THRESHOLD = 1.5;
+export const USER_ASK_MAX = 4000;
+export const PREVIEW_MAX = 1200;
+export const RERANK_MAX_CANDIDATES = 16;
+export const RERANK_KEEP_K = 3;
+export const RERANK_SCORE_KEEP = 1.5;
+export const RERANK_FOCUS_CONFIDENCE = 0.55;
+export const RERANK_ALLOW_MAX = 12;
+export const RERANK_SNIPPET_MAX = 180;
 
 /** Restricted unless the parent Task call already requested that type. */
 export const EXPLICIT_ONLY = new Set(["bugbot", "security-review"]);
@@ -48,5 +69,36 @@ export const SPECIALIST_QUESTION = {
   criteria: {
     true: "The work matches one specialist: codebase search, Cursor product help, library docs, CI diagnosis, AI architecture, deployment, or performance",
     false: "The work is ambiguous, cross-domain, or general implementation that should stay on generalPurpose",
+  },
+};
+
+export const PACE_QUESTION = {
+  type: "choice",
+  instructions:
+    "How much process should this task use? Prefer fast unless the work is truly broad.",
+  criteria: {
+    fast: "Local, one-shot, already-specified edit or lookup. Extra subagents, rereads, or long investigation would waste time",
+    standard: "Normal bounded work: a few files, one clear outcome, no extra fan-out",
+    thorough: "Broad investigation, many unknowns, or high-stakes review that needs extra passes",
+  },
+};
+
+export const DELEGATE_QUESTION = {
+  type: "noul",
+  instructions:
+    "Will a separate Cursor subagent finish this faster or better than the current agent doing it inline?",
+  criteria: {
+    true: "Isolated search, long implementation, or a specialist will save wall-clock time",
+    false: "A new subagent hop costs more than it saves: small edit, already-known context, or the parent can finish now",
+  },
+};
+
+export const CONTINUE_QUESTION = {
+  type: "noul",
+  instructions:
+    "Does the parent agent still need another subagent or a long extra investigation after this result?",
+  criteria: {
+    true: "The result is incomplete, wrong, or missing a required next specialist",
+    false: "The result is enough to finish the user request now",
   },
 };

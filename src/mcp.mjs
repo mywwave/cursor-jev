@@ -1,3 +1,4 @@
+import { evaluateGate, GATE_KINDS } from "./gates.mjs";
 import { systemOne } from "./client.mjs";
 import { CONSOLE_URL, serverInfo, serverIcons, readLogoSvg } from "./identity.mjs";
 import { resolveKey, writeStoredKey } from "./key.mjs";
@@ -33,7 +34,7 @@ export const TOOLS = [
     name: "jev_route",
     title: "Route subagent",
     description:
-      "Ask TypeSafe Jev to select a Cursor subagent type for a bounded task. Returns a role, status, and confidence; does not launch agents. Send a concise task summary, never secrets or a full transcript.",
+      "Ask TypeSafe Jev to select a Cursor subagent type for a bounded task. Returns a role, pace, and whether a subagent hop is worth it. Prefer jev_ask over launching Task when the hop is not worth it. Send a concise task summary, never secrets or a full transcript.",
     icons: toolIcons(),
     inputSchema: {
       type: "object",
@@ -57,6 +58,22 @@ export const TOOLS = [
         questions: { type: "object" },
       },
       required: ["state", "questions"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "jev_judge",
+    title: "Judge with Jev",
+    description:
+      "Preset TypeSafe gates: scope (keep the edit in the user ask), pick (choose one of 2–8 options), ready (stop vs keep going), split (compound request). Prefer this over inventing jev_ask questions. Do not send secrets or transcripts.",
+    icons: toolIcons(),
+    inputSchema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["scope", "pick", "ready", "split"] },
+        state: { type: "object" },
+      },
+      required: ["kind", "state"],
       additionalProperties: false,
     },
   },
@@ -184,12 +201,25 @@ async function callTool(name, args, options) {
       state: args.state,
       questions: args.questions,
       key: authed.key,
+      fetcher: options.fetcher,
+      timeoutMs: options.timeoutMs,
+      maxAttempts: options.maxAttempts,
     });
     if (!result.ok) {
       if (result.status === 401) return { error: MISSING_KEY };
       return { error: result.reason };
     }
     return { text: JSON.stringify(result.data) };
+  }
+  if (name === "jev_judge") {
+    const kind = args?.kind;
+    if (!GATE_KINDS.includes(kind)) return { error: "kind must be scope, pick, ready, or split." };
+    if (args.state == null || typeof args.state !== "object" || Array.isArray(args.state)) {
+      return { error: "state must be an object." };
+    }
+    const verdict = await evaluateGate(kind, args.state, authed.key, options);
+    if (verdict.error && verdict.error.startsWith("pick ")) return { error: verdict.error };
+    return { text: JSON.stringify(verdict) };
   }
   return { error: `Unknown tool: ${name}` };
 }
@@ -254,7 +284,7 @@ export async function handleRpc(message, options = {}) {
       result: {
         protocolVersion: version,
         instructions:
-          "Jev is TypeSafe System One, not a chat model. Use jev_auth to connect a TypeSafe API key, jev_route to pick a Cursor subagent, and jev_ask for Choice/Score/Noul. Never send secrets as state.",
+          "Jev is TypeSafe System One, not a chat model. Use jev_auth to connect, jev_route to pick a subagent, jev_judge for scope/pick/ready/split gates, and jev_ask for custom Choice/Score/Noul. Prefer jev_judge over extra Task hops. Never send secrets as state.",
         capabilities: {
           tools: {},
           prompts: {},

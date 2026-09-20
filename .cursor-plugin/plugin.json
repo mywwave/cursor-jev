@@ -2,7 +2,7 @@
   "name": "cursor-jev",
   "displayName": "Jev",
   "version": "0.1.0",
-  "description": "Route Cursor subagents with TypeSafe Jev and ask typed Choice, Score, and Noul questions.",
+  "description": "Speed Cursor agents with TypeSafe Jev: fewer Task hops, jev_judge/jev_ask instead of long deliberation.",
   "author": {
     "name": "cursor-jev contributors"
   },

@@ -4,7 +4,34 @@
     "preToolUse": [
       {
         "command": "node ./bin/cli.mjs hook",
-        "matcher": "Task"
+        "matcher": "Task|Write|StrReplace|Delete|Read",
+        "timeout": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "node ./bin/cli.mjs hook",
+        "matcher": "Task|Grep|Glob|SemanticSearch|MCP:codegraph_explore",
+        "timeout": 5
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node ./bin/cli.mjs hook",
+        "matcher": "UserPromptSubmit",
+        "timeout": 5
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "node ./bin/cli.mjs hook",
+        "timeout": 5
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "node ./bin/cli.mjs hook",
+        "timeout": 5
       }
     ]
   }

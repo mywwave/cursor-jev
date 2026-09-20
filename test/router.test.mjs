@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { routeTask } from "../src/router.mjs";
+import { routeTask, shouldContinue } from "../src/router.mjs";
 import { CONFIDENCE_THRESHOLD, FALLBACK_AGENT } from "../src/roles.mjs";
 
 function jsonResponse(answers, status = 200) {
@@ -143,4 +143,28 @@ test("does not switch to security-review unless requested", async () => {
   });
   assert.equal(decision.status, "uncertain");
   assert.equal(decision.agent, "explore");
+});
+
+test("returns pace and needsDelegate from the same TypeSafe call", async () => {
+  const decision = await routeTask("rename a local variable", "key", {
+    requestedType: "generalPurpose",
+    fetcher: async () =>
+      jsonResponse({
+        ...answers({ choice: "generalPurpose", confidence: 0.95, noul: 0.1 }),
+        pace: { type: "choice", choice: "fast", confidence: 0.9 },
+        needs_delegate: { type: "noul", noul: 0.15 },
+      }),
+  });
+  assert.equal(decision.status, "routed");
+  assert.equal(decision.pace, "fast");
+  assert.equal(decision.needsDelegate, 0.15);
+});
+
+test("shouldContinue is false when noul is below the stop threshold", async () => {
+  const verdict = await shouldContinue("auth is in src/auth.mjs", "key", {
+    fetcher: async () =>
+      jsonResponse({ continue_needed: { type: "noul", noul: 0.2 } }),
+  });
+  assert.equal(verdict.continue, false);
+  assert.equal(verdict.noul, 0.2);
 });

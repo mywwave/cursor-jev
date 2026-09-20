@@ -1,3 +1,4 @@
+import { HOOK_TIMEOUT_SECONDS } from "./roles.mjs";
 import { seedKeyFromEnv } from "./key.mjs";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -5,7 +6,15 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const SERVER_NAME = "jev";
-export const HOOK_MATCHER = "Task";
+export const HOOK_MATCHER = "Task|Write|StrReplace|Delete|Read";
+export const HOOK_SPECS = [
+  { event: "preToolUse", matcher: HOOK_MATCHER },
+  { event: "postToolUse", matcher: "Task|Grep|Glob|SemanticSearch|MCP:codegraph_explore" },
+  { event: "beforeSubmitPrompt", matcher: "UserPromptSubmit" },
+  { event: "beforeShellExecution" },
+  { event: "afterAgentResponse" },
+];
+export const HOOK_EVENTS = HOOK_SPECS.map((spec) => spec.event);
 const RULE_NAME = "jev-typesafe.mdc";
 const SKILL_DIR = "jev-subagents";
 
@@ -92,18 +101,28 @@ export function mergeHooksConfig(existing, root) {
       : { version: 1, hooks: {} };
   if (next.version == null) next.version = 1;
   if (!next.hooks || typeof next.hooks !== "object") next.hooks = {};
-  const list = Array.isArray(next.hooks.preToolUse) ? next.hooks.preToolUse : [];
-  const kept = list.filter((entry) => !isOurHook(entry, root));
-  kept.push({ command: hookCommand(root), matcher: HOOK_MATCHER });
-  next.hooks.preToolUse = kept;
+  for (const spec of HOOK_SPECS) {
+    const entry = {
+      command: hookCommand(root),
+      timeout: HOOK_TIMEOUT_SECONDS,
+    };
+    if (spec.matcher) entry.matcher = spec.matcher;
+    const list = Array.isArray(next.hooks[spec.event]) ? next.hooks[spec.event] : [];
+    const kept = list.filter((item) => !isOurHook(item, root));
+    kept.push(entry);
+    next.hooks[spec.event] = kept;
+  }
   return next;
 }
 
 export function unmergeHooksConfig(existing, root) {
   if (!existing || typeof existing !== "object") return existing;
   const next = structuredClone(existing);
-  if (!Array.isArray(next.hooks?.preToolUse)) return next;
-  next.hooks.preToolUse = next.hooks.preToolUse.filter((entry) => !isOurHook(entry, root));
+  if (!next.hooks || typeof next.hooks !== "object") return next;
+  for (const event of HOOK_EVENTS) {
+    if (!Array.isArray(next.hooks[event])) continue;
+    next.hooks[event] = next.hooks[event].filter((item) => !isOurHook(item, root));
+  }
   return next;
 }
 

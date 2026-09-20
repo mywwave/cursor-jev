@@ -1,7 +1,7 @@
 {
   "name": "cursor-jev",
   "version": "0.1.0",
-  "description": "Route Cursor subagents with TypeSafe Jev and expose Choice, Score, and Noul as MCP tools.",
+  "description": "Speed Cursor agents with TypeSafe Jev: fewer Task hops, and Choice/Score/Noul as MCP tools.",
   "type": "module",
   "bin": {
     "cursor-jev": "./bin/cli.mjs"
@@ -26,7 +26,7 @@
     "hook": "node bin/cli.mjs hook"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.13.0"
   },
   "keywords": [
     "cursor",
