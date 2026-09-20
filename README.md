@@ -4,6 +4,8 @@ Route [Cursor](https://cursor.com) subagents with [TypeSafe](https://docs.typesa
 
 Jev is not a chat model. It cannot write code, call tools, or be used as a Cursor `model` ID (`jev`, `jev-latest`, and `typesafe-ai/jev` are invalid there). Jev classifies and scores; Cursor LLMs execute.
 
+The value is not “another AI”. Expensive Cursor hops become cheaper and rarer. Jev answers yes / no / which option in about 100ms. It does not write the patch.
+
 ```
 Parent agent
   → Task / Write / shell
@@ -12,6 +14,22 @@ Parent agent
     → allow / deny / ask / rewrite
     → MCP jev_judge / jev_ask / jev_route / jev_auth
 ```
+
+## Why this helps
+
+It saves three things.
+
+1. **Extra subagents.** `Task` is a costly hop: new context, a second search, sometimes nesting. The plugin cuts that itself. A local edit stays on the current agent. A second `Task` in the same turn is blocked. A nested subagent is denied. That matters when the model likes to spawn `explore` / `generalPurpose` “just in case”.
+
+2. **Extra repo reads.** After `Grep` / `Glob`, Jev keeps about three relevant files and denies `Read` of README, sibling modules, and other noise. On a large monorepo that is where an agent burns a turn on fifteen files instead of two.
+
+3. **Scope creep.** “Fix the bug” should not become a neighbor refactor plus extra tests. The scope gate denies writes the user did not ask for. Destructive shell (`reset --hard`, `push --force`) asks you instead of running silently.
+
+The agent can also call Jev instead of a long thinking pass: which of four files, done or not, one job or three. That is faster than another reasoning loop.
+
+**Almost useless** on a one-file tweak, with no TypeSafe key (hooks fail open), or when a hook blocks a `Read` / `Write` you actually needed — then it is friction, not speed.
+
+Cursor still writes the code. Jev only decides whether that hop is worth taking.
 
 ## Install
 
@@ -33,8 +51,8 @@ Then fully restart Cursor (or Developer: Reload Window).
 | --- | --- |
 | `~/.cursor/plugins/local/cursor-jev` | Cursor plugin **Jev** (avatar, MCP, hooks, Configure) |
 | `~/.cursor/mcp.json` | User stdio server `jev` (`envFile` → `~/.cursor/cursor-jev.env`) |
-| `~/.cursor/hooks.json` | Task / Write / prompt / shell / ready hooks |
-| `~/.cursor/cursor-jev.sqlite` | WAL store for sanitized user asks and Task fan-out (created on first hook) |
+| `~/.cursor/hooks.json` | Task / Write / Read / prompt / shell / ready hooks |
+| `~/.cursor/cursor-jev.sqlite` | WAL store for sanitized user asks, Task fan-out, and rerank allowlists |
 | `~/.cursor/rules/jev-typesafe.mdc` | Always-on routing reminder (`--no-rule` to skip) |
 | `~/.cursor/skills/jev-subagents/SKILL.md` | Agent skill (`--no-skill` to skip) |
 
@@ -82,7 +100,7 @@ Do not send secrets, `.env` files, credentials, or full transcripts as `state`.
 
 ## Speed
 
-Jev is ~100ms per judgment. A Cursor Task subagent is seconds to minutes. The plugin speeds agents by **cutting hops**, not by replacing the coding model.
+Jev is ~100ms per judgment. A Cursor Task subagent is seconds to minutes. The plugin speeds agents by **cutting hops**, not by replacing the coding model. Missing key, HTTP error, or timeout **fail open**.
 
 | Waste | What Jev does |
 | --- | --- |
