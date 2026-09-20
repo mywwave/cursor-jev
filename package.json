@@ -1,0 +1,40 @@
+{
+  "name": "cursor-jev",
+  "version": "0.1.0",
+  "description": "Route Cursor subagents with TypeSafe Jev and expose Choice, Score, and Noul as MCP tools.",
+  "type": "module",
+  "bin": {
+    "cursor-jev": "./bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "templates",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "mcp": "node bin/cli.mjs mcp",
+    "hook": "node bin/cli.mjs hook"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "cursor",
+    "typesafe",
+    "jev",
+    "mcp",
+    "subagents"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mywwave/cursor-jev.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mywwave/cursor-jev/issues"
+  },
+  "homepage": "https://github.com/mywwave/cursor-jev#readme"
+}
