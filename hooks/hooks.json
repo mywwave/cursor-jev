@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": "node ./bin/cli.mjs hook",
+        "matcher": "Task"
+      }
+    ]
+  }
+}

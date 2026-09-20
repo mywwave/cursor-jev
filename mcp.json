@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "jev": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CURSOR_PLUGIN_ROOT}/bin/cli.mjs", "mcp"],
+      "env": {
+        "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}"
+      },
+      "envFile": "${userHome}/.cursor/cursor-jev.env"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "cursor-jev",
+  "displayName": "Jev",
+  "version": "0.1.0",
+  "description": "Route Cursor subagents with TypeSafe Jev and ask typed Choice, Score, and Noul questions.",
+  "author": {
+    "name": "cursor-jev contributors"
+  },
+  "homepage": "https://github.com/mywwave/cursor-jev",
+  "repository": "https://github.com/mywwave/cursor-jev",
+  "license": "MIT",
+  "logo": "assets/logo.svg",
+  "keywords": [
+    "jev",
+    "typesafe",
+    "mcp",
+    "subagents",
+    "routing"
+  ],
+  "category": "developer-tools",
+  "tags": [
+    "jev",
+    "typesafe",
+    "mcp",
+    "subagents"
+  ],
+  "mcpServers": "./mcp.json",
+  "hooks": "./hooks/hooks.json",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "TYPESAFE_API_KEY": {
+        "type": "string",
+        "title": "TypeSafe API key",
+        "description": "Create a key at https://console.typesafe.ai and paste it here. Cursor stores it for the Jev MCP server. Do not commit the value."
+      }
+    },
+    "required": []
+  }
+}

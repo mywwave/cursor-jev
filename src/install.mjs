@@ -1,4 +1,5 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { seedKeyFromEnv } from "./key.mjs";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,10 +30,28 @@ export function isOurHook(entry, root) {
   return normalized.includes("cursor-jev") || normalized.includes(cli);
 }
 
+const PLUGIN_ENTRIES = [
+  ".cursor-plugin",
+  "assets",
+  "bin",
+  "src",
+  "hooks",
+  "rules",
+  "skills",
+  "mcp.json",
+  "package.json",
+];
+
+export function localPluginDir(home = homedir()) {
+  return join(cursorHome(home), "plugins", "local", "cursor-jev");
+}
+
 export function mcpServerConfig(root) {
   return {
+    type: "stdio",
     command: "node",
     args: [join(root, "bin", "cli.mjs"), "mcp"],
+    envFile: "${userHome}/.cursor/cursor-jev.env",
   };
 }
 
@@ -93,30 +112,37 @@ async function copyFile(from, to) {
   await writeFile(to, await readFile(from, "utf8"), "utf8");
 }
 
+async function copyPlugin(root, dest) {
+  await mkdir(dest, { recursive: true });
+  for (const entry of PLUGIN_ENTRIES) {
+    await cp(join(root, entry), join(dest, entry), { recursive: true, force: true });
+  }
+}
+
 export async function install(options = {}) {
   const root = options.root ?? repoRootFromHere();
   const home = cursorHome(options.home);
   const mcpPath = join(home, "mcp.json");
   const hooksPath = join(home, "hooks.json");
+  const pluginDir = localPluginDir(options.home);
 
   await writeJson(mcpPath, mergeMcpConfig(await readJson(mcpPath, { mcpServers: {} }), root));
   await writeJson(hooksPath, mergeHooksConfig(await readJson(hooksPath, { version: 1, hooks: {} }), root));
+  await copyPlugin(root, pluginDir);
 
   if (!options.noRule) {
-    await copyFile(
-      join(root, "templates", "rules", RULE_NAME),
-      join(home, "rules", RULE_NAME),
-    );
+    await copyFile(join(root, "rules", RULE_NAME), join(home, "rules", RULE_NAME));
   }
 
   if (!options.noSkill) {
     await copyFile(
-      join(root, "templates", "skills", SKILL_DIR, "SKILL.md"),
+      join(root, "skills", SKILL_DIR, "SKILL.md"),
       join(home, "skills", SKILL_DIR, "SKILL.md"),
     );
   }
 
-  return { mcpPath, hooksPath, home, root };
+  const key = await seedKeyFromEnv({ home: options.home, key: options.key });
+  return { mcpPath, hooksPath, home, root, pluginDir, key };
 }
 
 export async function uninstall(options = {}) {
@@ -129,5 +155,6 @@ export async function uninstall(options = {}) {
   await writeJson(hooksPath, unmergeHooksConfig(await readJson(hooksPath, { version: 1, hooks: {} }), root));
   await rm(join(home, "rules", RULE_NAME), { force: true });
   await rm(join(home, "skills", SKILL_DIR), { recursive: true, force: true });
+  await rm(localPluginDir(options.home), { recursive: true, force: true });
   return { mcpPath, hooksPath };
 }

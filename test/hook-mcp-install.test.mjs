@@ -1,7 +1,10 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handlePreToolUse } from "../src/hook.mjs";
-import { handleRpc } from "../src/mcp.mjs";
+import { createFramer, encodeMessage, handleRpc } from "../src/mcp.mjs";
 import { mergeHooksConfig, mergeMcpConfig, unmergeHooksConfig, unmergeMcpConfig } from "../src/install.mjs";
 
 function fetcherFor(choice, confidence = 0.92, noul = 0.9) {
@@ -55,6 +58,21 @@ test("hook ignores non-Task tools", async () => {
   assert.deepEqual(result, { permission: "allow" });
 });
 
+test("stdio frames are newline-delimited JSON", () => {
+  const init = { jsonrpc: "2.0", id: 1, method: "initialize", params: {} };
+  const frame = encodeMessage(init).toString("utf8");
+  assert.equal(frame.endsWith("\n"), true);
+  assert.equal(frame.includes("Content-Length"), false);
+  assert.deepEqual(JSON.parse(frame), init);
+
+  const received = [];
+  const push = createFramer((msg) => received.push(msg));
+  push(Buffer.from(`${JSON.stringify(init)}\n`));
+  push(encodeMessage({ jsonrpc: "2.0", id: 2, method: "ping" }));
+  assert.equal(received.length, 2);
+  assert.equal(received[1].method, "ping");
+});
+
 test("MCP initialize and tools/list", async () => {
   const init = await handleRpc({
     jsonrpc: "2.0",
@@ -64,12 +82,46 @@ test("MCP initialize and tools/list", async () => {
   });
   assert.equal(init.result.protocolVersion, "2025-06-18");
   assert.equal(init.result.serverInfo.name, "cursor-jev");
+  assert.equal(init.result.serverInfo.title, "Jev");
+  assert.ok(init.result.serverInfo.icons?.length >= 1);
+  assert.match(init.result.serverInfo.icons[0].src, /^data:image\/svg\+xml/);
+  assert.ok(init.result.capabilities.tools);
 
   const list = await handleRpc({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   assert.deepEqual(
     list.result.tools.map((t) => t.name),
-    ["jev_route", "jev_ask"],
+    ["jev_auth", "jev_route", "jev_ask"],
   );
+});
+
+test("MCP jev_auth without a session explains how to connect", async () => {
+  const result = await handleRpc({
+    jsonrpc: "2.0",
+    id: 4,
+    method: "tools/call",
+    params: { name: "jev_auth", arguments: {} },
+  });
+  assert.equal(result.result.isError, true);
+  assert.match(result.result.content[0].text, /Configure|set-key|jev_auth/i);
+});
+
+test("MCP jev_auth elicitation saves the key", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "cursor-jev-"));
+  const session = {
+    home: tmp,
+    elicit: async () => ({ action: "accept", content: { apiKey: "apikey_test_not_real" } }),
+  };
+  const result = await handleRpc(
+    {
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: { name: "jev_auth", arguments: {} },
+    },
+    { session },
+  );
+  assert.equal(result.result.isError, undefined);
+  assert.match(result.result.content[0].text, /connected/i);
 });
 
 test("MCP jev_ask rejects unknown question types", async () => {
@@ -97,6 +149,8 @@ test("install merge keeps unrelated MCP servers and hooks", () => {
   );
   assert.equal(mcp.mcpServers.other.command, "echo");
   assert.equal(mcp.mcpServers.jev.command, "node");
+  assert.equal(mcp.mcpServers.jev.type, "stdio");
+  assert.ok(mcp.mcpServers.jev.envFile.includes("cursor-jev.env"));
   assert.ok(mcp.mcpServers.jev.args[0].includes("cli.mjs"));
 
   const hooks = mergeHooksConfig(

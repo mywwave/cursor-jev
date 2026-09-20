@@ -1,3 +1,4 @@
+import { resolveKey } from "./key.mjs";
 import { routeTask } from "./router.mjs";
 import { FALLBACK_AGENT } from "./roles.mjs";
 
@@ -38,7 +39,7 @@ export async function handlePreToolUse(input, options = {}) {
     const requested =
       typeof toolInput.subagent_type === "string" ? toolInput.subagent_type : FALLBACK_AGENT;
     const task = taskText(toolInput);
-    const key = options.key ?? process.env.TYPESAFE_API_KEY;
+    const key = await resolveKey(options);
     const decision = await routeTask(task, key, {
       requestedType: requested,
       fetcher: options.fetcher,

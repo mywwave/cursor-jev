@@ -9,12 +9,19 @@
   "files": [
     "bin",
     "src",
+    "assets",
+    "hooks",
+    "rules",
+    "skills",
     "templates",
+    ".cursor-plugin",
+    "mcp.json",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "smoke": "node scripts/mcp-smoke.mjs",
     "mcp": "node bin/cli.mjs mcp",
     "hook": "node bin/cli.mjs hook"
   },

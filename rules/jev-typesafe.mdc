@@ -1,0 +1,26 @@
+---
+description: Route Cursor subagents through TypeSafe Jev and use jev_ask for typed judgments
+alwaysApply: true
+---
+
+# Jev TypeSafe routing
+
+Jev is TypeSafe's System One model. It is not a chat model and must not be used as a Cursor `model` ID. It classifies and scores; Cursor LLMs write code.
+
+## Before launching a subagent
+
+A user hook already calls Jev on every `Task` tool use and may rewrite `subagent_type`. Do not set `model` to `jev`, `jev-latest`, or `typesafe-ai/jev`.
+
+If you need an explicit routing preview, call MCP `jev_route` with a short task summary (never secrets or a full transcript).
+
+## Typed judgments
+
+When a decision is a closed set, a yes/no, or a rubric score, call MCP `jev_ask` instead of prompt-and-parse:
+
+- `choice` — pick one option from criteria you define
+- `score` — rate against ordered levels
+- `noul` — probability that a statement is true (0–1)
+
+Keep questions atomic. Combine answers in code. Do not send API keys, `.env` contents, credentials, or full chat transcripts as `state`.
+
+Authorize once in Cursor: Customize → Plugins → Jev → Configure, or run `node bin/cli.mjs set-key`, or call MCP `jev_auth`.
