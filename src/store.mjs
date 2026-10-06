@@ -33,6 +33,16 @@ function openStore(home) {
       paths TEXT NOT NULL,
       at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS workflows (
+      conversation_id TEXT NOT NULL,
+      generation_id TEXT NOT NULL,
+      workflow_choice TEXT NOT NULL,
+      workflow_owner TEXT NOT NULL,
+      reason TEXT,
+      confidence REAL,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (conversation_id, generation_id)
+    );
   `);
   return db;
 }
@@ -110,5 +120,81 @@ export async function mergeAllowlist(conversationId, paths, home) {
       "INSERT INTO reads(conversation_id, paths, at) VALUES (?, ?, ?) ON CONFLICT(conversation_id) DO UPDATE SET paths = excluded.paths, at = excluded.at",
     ).run(id, JSON.stringify(next), Date.now());
     return next;
+  });
+}
+
+function normalizeReceipt(row) {
+  if (!row) return null;
+  return {
+    conversation_id: String(row.conversation_id ?? ""),
+    generation_id: String(row.generation_id ?? ""),
+    workflow_choice: String(row.workflow_choice ?? ""),
+    workflow_owner: String(row.workflow_owner ?? ""),
+    reason: typeof row.reason === "string" ? row.reason : "",
+    confidence: typeof row.confidence === "number" ? row.confidence : null,
+    at: Number(row.at) || 0,
+  };
+}
+
+/**
+ * Persist a workflow receipt for conversation+generation.
+ */
+export async function writeWorkflowReceipt(conversationId, generationId, receipt, home) {
+  const cid = String(conversationId ?? "").trim();
+  const gid = String(generationId ?? cid).trim() || cid;
+  if (!cid || !gid || !receipt?.workflow_choice) return null;
+  const choice = String(receipt.workflow_choice);
+  const owner = String(receipt.workflow_owner ?? "jev");
+  const reason = String(receipt.reason ?? "").slice(0, 500);
+  const confidence =
+    typeof receipt.confidence === "number" && Number.isFinite(receipt.confidence)
+      ? receipt.confidence
+      : null;
+  const at = Date.now();
+  withStore(home, (db) => {
+    db.prepare(
+      `INSERT INTO workflows(conversation_id, generation_id, workflow_choice, workflow_owner, reason, confidence, at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(conversation_id, generation_id) DO UPDATE SET
+         workflow_choice = excluded.workflow_choice,
+         workflow_owner = excluded.workflow_owner,
+         reason = excluded.reason,
+         confidence = excluded.confidence,
+         at = excluded.at`,
+    ).run(cid, gid, choice, owner, reason, confidence, at);
+  });
+  return normalizeReceipt({
+    conversation_id: cid,
+    generation_id: gid,
+    workflow_choice: choice,
+    workflow_owner: owner,
+    reason,
+    confidence,
+    at,
+  });
+}
+
+/**
+ * Lookup receipt for conversation+generation; falls back to latest for conversation.
+ */
+export async function readWorkflowReceipt(conversationId, generationId, home) {
+  const cid = String(conversationId ?? "").trim();
+  const gid = String(generationId ?? "").trim();
+  if (!cid) return null;
+  return withStore(home, (db) => {
+    if (gid) {
+      const exact = db
+        .prepare(
+          "SELECT conversation_id, generation_id, workflow_choice, workflow_owner, reason, confidence, at FROM workflows WHERE conversation_id = ? AND generation_id = ?",
+        )
+        .get(cid, gid);
+      if (exact) return normalizeReceipt(exact);
+    }
+    const latest = db
+      .prepare(
+        "SELECT conversation_id, generation_id, workflow_choice, workflow_owner, reason, confidence, at FROM workflows WHERE conversation_id = ? ORDER BY at DESC LIMIT 1",
+      )
+      .get(cid);
+    return normalizeReceipt(latest);
   });
 }

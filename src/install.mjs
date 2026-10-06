@@ -6,15 +6,23 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const SERVER_NAME = "jev";
-export const HOOK_MATCHER = "Task|Write|StrReplace|Delete|Read";
+export const HOOK_MATCHER = "Task|Write|StrReplace|Delete|Read|Shell|MCP:.*";
 export const HOOK_SPECS = [
   { event: "preToolUse", matcher: HOOK_MATCHER },
   { event: "postToolUse", matcher: "Task|Grep|Glob|SemanticSearch|MCP:codegraph_explore" },
   { event: "beforeSubmitPrompt", matcher: "UserPromptSubmit" },
   { event: "beforeShellExecution" },
-  { event: "afterAgentResponse" },
+  { event: "beforeMCPExecution" },
+  { event: "subagentStop" },
+  { event: "preCompact" },
+  // Ready/completion enforcement uses `stop` + followup_message (Cursor docs).
+  // afterAgentResponse is observational only and cannot continue the loop.
+  { event: "stop" },
 ];
 export const HOOK_EVENTS = HOOK_SPECS.map((spec) => spec.event);
+
+/** Events documented in create-hook skill but not yet wired (none currently). */
+export const DEFERRED_HOOK_EVENTS = [];
 const RULE_NAME = "jev-typesafe.mdc";
 const SKILL_DIR = "jev-subagents";
 

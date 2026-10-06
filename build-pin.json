@@ -1,0 +1,16 @@
+{
+  "sha": "88cb0bd8d6b1a7ab310730a7665d200d6b5d7fc9",
+  "branch": "fabric/pstack-bypass-and-pin",
+  "requiredTests": [
+    "test/pstack-bypass.test.mjs",
+    "test/ship-stop.test.mjs",
+    "test/workflow-receipt.test.mjs",
+    "node scripts/doctor.mjs"
+  ],
+  "invariants": [
+    "PSTACK receipt or explicit orchestration: Task rewrite OFF, fanout OFF, model override OFF, postToolUse STOP_CONTEXT steer OFF",
+    "Scope/shell/ready/learning still apply under pstack",
+    "Workflow receipt required before Write/Task/mutating Shell when conversation_id present",
+    "Ship-critical shell fails closed without TypeSafe key"
+  ]
+}

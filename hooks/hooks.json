@@ -4,7 +4,7 @@
     "preToolUse": [
       {
         "command": "node ./bin/cli.mjs hook",
-        "matcher": "Task|Write|StrReplace|Delete|Read",
+        "matcher": "Task|Write|StrReplace|Delete|Read|Shell|MCP:.*",
         "timeout": 5
       }
     ],
@@ -28,7 +28,25 @@
         "timeout": 5
       }
     ],
-    "afterAgentResponse": [
+    "beforeMCPExecution": [
+      {
+        "command": "node ./bin/cli.mjs hook",
+        "timeout": 5
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "node ./bin/cli.mjs hook",
+        "timeout": 5
+      }
+    ],
+    "preCompact": [
+      {
+        "command": "node ./bin/cli.mjs hook",
+        "timeout": 5
+      }
+    ],
+    "stop": [
       {
         "command": "node ./bin/cli.mjs hook",
         "timeout": 5

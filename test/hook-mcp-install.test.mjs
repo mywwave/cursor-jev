@@ -237,13 +237,16 @@ test("install merge keeps unrelated MCP servers and hooks", () => {
   );
   assert.equal(hooks.hooks.preToolUse.length, 2);
   assert.equal(hooks.hooks.preToolUse[0].matcher, "Shell");
-  assert.equal(hooks.hooks.preToolUse[1].matcher, "Task|Write|StrReplace|Delete|Read");
+  assert.equal(hooks.hooks.preToolUse[1].matcher, "Task|Write|StrReplace|Delete|Read|Shell|MCP:.*");
   assert.equal(hooks.hooks.postToolUse[0].matcher, "Task|Grep|Glob|SemanticSearch|MCP:codegraph_explore");
   assert.equal(hooks.hooks.postToolUse.length, 1);
   assert.equal(hooks.hooks.postToolUse[0].timeout, 5);
   assert.equal(hooks.hooks.beforeSubmitPrompt.length, 1);
   assert.equal(hooks.hooks.beforeShellExecution.length, 1);
-  assert.equal(hooks.hooks.afterAgentResponse.length, 1);
+  assert.equal(hooks.hooks.subagentStop.length, 1);
+  assert.equal(hooks.hooks.preCompact.length, 1);
+  assert.equal(hooks.hooks.beforeMCPExecution.length, 1);
+  assert.equal(hooks.hooks.stop.length, 1);
 
   const cleanedMcp = unmergeMcpConfig(mcp);
   assert.equal(cleanedMcp.mcpServers.jev, undefined);
@@ -256,24 +259,40 @@ test("install merge keeps unrelated MCP servers and hooks", () => {
 });
 
 test("hook denies an out-of-scope Write", async () => {
-  const result = await handlePreToolUse(
-    {
-      tool_name: "Write",
-      conversation_id: "c1",
-      tool_input: { path: "README.md", contents: "unrelated rewrite" },
-    },
-    {
-      key: "key",
-      userAsk: "fix the Task hook",
-      fetcher: async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({ answers: { in_scope: { type: "noul", noul: 0.1 } } }),
-      }),
-    },
-  );
-  assert.equal(result.permission, "deny");
-  assert.equal(result.agent_message, SCOPE_MESSAGE);
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { writeWorkflowReceipt } = await import("../src/store.mjs");
+  const home = await mkdtemp(join(tmpdir(), "jev-scope-"));
+  try {
+    await writeWorkflowReceipt(
+      "c1",
+      "c1",
+      { workflow_choice: "DIRECT", workflow_owner: "jev", reason: "test", confidence: 1 },
+      home,
+    );
+    const result = await handlePreToolUse(
+      {
+        tool_name: "Write",
+        conversation_id: "c1",
+        tool_input: { path: "README.md", contents: "unrelated rewrite" },
+      },
+      {
+        home,
+        key: "key",
+        userAsk: "fix the Task hook",
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ answers: { in_scope: { type: "noul", noul: 0.1 } } }),
+        }),
+      },
+    );
+    assert.equal(result.permission, "deny");
+    assert.equal(result.agent_message, SCOPE_MESSAGE);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
 });
 
 test("beforeSubmitPrompt stores the ask and warns on compound requests", async () => {
@@ -286,20 +305,33 @@ test("beforeSubmitPrompt stores the ask and warns on compound requests", async (
         stored = { id, ask };
         return ask;
       },
+      writeWorkflowReceipt: async () => ({
+        workflow_choice: "DIRECT",
+        workflow_owner: "jev",
+        reason: "test",
+        confidence: 0.5,
+      }),
       fetcher: async () => ({
         ok: true,
         status: 200,
-        json: async () => ({ answers: { compound: { type: "noul", noul: 0.92 } } }),
+        json: async () => ({
+          answers: {
+            // classifyWorkflow pick + split compound share one fetcher in real life;
+            // here classify falls to heuristic (pick answer shape ignored) and split uses compound.
+            compound: { type: "noul", noul: 0.92 },
+          },
+        }),
       }),
     },
   );
   assert.equal(stored.id, "c1");
-  assert.equal(result.additional_context, SPLIT_CONTEXT);
+  assert.match(String(result.additional_context ?? ""), /several independent tasks/);
+  assert.match(String(result.additional_context ?? ""), /Jev workflow:/);
 });
 
 test("beforeShellExecution asks on destructive unmatched commands", async () => {
   const result = await handleBeforeShellExecution(
-    { hook_event_name: "beforeShellExecution", command: "git reset --hard" },
+    { hook_event_name: "beforeShellExecution", command: "rm -rf ./dist-build-cache" },
     {
       key: "key",
       userAsk: "run the unit tests",

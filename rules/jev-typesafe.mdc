@@ -1,45 +1,56 @@
 ---
-description: Route Cursor subagents through TypeSafe Jev, use jev_judge/jev_ask instead of deliberation, and keep agent loops short
+description: Jev is Cursor's typed decision layer — hooks enforce; MCP is optional; Cursor LLM executes
 alwaysApply: true
 ---
 
-# Jev TypeSafe routing and speed
+# Jev control plane (fabric)
 
-Jev is TypeSafe's System One model. It is not a chat model and must not be used as a Cursor `model` ID. It classifies and scores in ~100ms; Cursor LLMs write code.
+Jev is TypeSafe System One. It answers **Choice / Score / Noul** only. It is never a Cursor `model` ID. Cursor's normal model writes replies and code.
 
-The point of this plugin is to finish the user's request in fewer hops. A Task subagent is expensive. Nested Task is worse. Long chain-of-thought over a yes/no is worse than `jev_judge` / `jev_ask`.
+```text
+USER → JEV prompt triage → JEV context+workflow pick → Lead
+  ordinary: JEV assists (context/tool/Task/scope/risk)
+  engineering: PSTACK PROTECTED ZONE (workflow/models/panels/fanout)
+               JEV still surrounds (read soft / write scope / shell / MCP / ready / learning)
+→ deterministic effect gates → result → JEV lesson detect → reflect/correct (approval-gated)
+```
 
-## Default: do the work yourself
+**Invariant.** Exempt only **pstack-owned orchestration** (Task rewrite / fan-out / model override) when the workflow receipt is `PSTACK`+`owner=pstack`, or when the Task is already explicitly orchestrated (`poteto-agent`, pinned model, `/poteto-mode`, `Jev bypass: pstack`). Do **not** exempt pstack from scope, shell, ready, or learning.
 
-Do not launch `Task` unless the work is isolated enough that a subagent will be faster than continuing here. If a hook or `jev_route` says to stay inline, stay inline.
+## Fabric table
 
-Never launch Task from a subagent. Never launch a second Task in the same turn unless the two chunks are independent and both must run.
+| Moment | Hook | Jev job |
+| --- | --- | --- |
+| User submit | `beforeSubmitPrompt` | Store ask; classify workflow receipt; advisory split |
+| First mutate | `preToolUse` / shell | Deny Write/Task/mutating Shell without receipt (Reads soft-allow) |
+| `Task` | `preToolUse` | Route/rewrite/fan-out **unless** pstack receipt or explicit orchestration |
+| Search | `postToolUse` | Rank paths; later Read allowlist |
+| Write/Delete | `preToolUse` | Scope gate |
+| MCP | `beforeMCPExecution` / `MCP:*` | Advisory allow/deny; fail-open |
+| Shell | `beforeShellExecution` | Hard deny force-push/hard-reset; ship fail-closed without key |
+| Subagent end | `subagentStop` | Sufficiency context; do not steer pstack aggregation |
+| Compact | `preCompact` | Advisory preserve list from receipt/allowlist |
+| Finish | `stop` | Ready → allow; incomplete → `followup_message` |
 
-## Before launching a subagent
+## Workflow receipt
 
-A user hook already calls Jev on every `Task` tool use. It may rewrite `subagent_type`, inject a one-pass contract, or deny wasted hops. Do not set `model` to `jev`, `jev-latest`, or `typesafe-ai/jev`.
+Stored per `conversation_id` + `generation_id` in `~/.cursor/cursor-jev.sqlite` (`workflows` table):
 
-If you need a routing preview, call MCP `jev_route` with a short task summary (never secrets or a full transcript).
+`workflow_choice ∈ {DIRECT,ASEO_ANALYSIS,PSTACK,RESEARCH,VERIFY,SHIP}` · `workflow_owner ∈ {jev,pstack,aseo}`
 
-## Preset gates (`jev_judge`)
+Helpers (metadata only; Jev does not decide create/delete page or pricing):
 
-Call `jev_judge` instead of inventing questions:
+- Context pick: `pickContextSources` / project `node .cursor/jev/context-pick.mjs`
+- Evidence pick: `pickEvidenceSources` / project `node .cursor/jev/evidence-pick.mjs`
 
-- `kind: "scope"` before a new file or extra refactor — if `action` is `skip`, do not write it
-- `kind: "pick"` when you have 2–8 candidate files or approaches — follow `pick`, do not read everything
-- `kind: "ready"` before saying you are done — if `action` is `stop`, hand the work back
-- `kind: "split"` at the start of a compound ask — if `action` is `split`, sequence the jobs in this agent; do not mix them
+## Progressive pstack manuals
 
-A search hook already reranks Grep/Glob hits. Prefer those files; do not Read the rest of the shortlist unless the ask changed.
+**Not used.** Ordinary workers do not load progressive per-agent pstack curricula. When pstack is invoked, `poteto-mode` / `poteto-agent` already own method load.
 
-Custom questions still go through `jev_ask` (`choice` / `score` / `noul`).
+## Agent habits
 
-Keep questions atomic. Combine answers in code. Do not send API keys, `.env` contents, credentials, or full chat transcripts as `state`.
+- Call `jev_judge` (`scope` / `pick` / `ready` / `split`) for closed gates; `jev_ask` only for custom questions.
+- Never nest `Task`. Never send secrets as Jev `state`.
+- Ship-critical shells deny when the TypeSafe key is missing.
 
-If Choice/Score confidence is low, do not guess — ask the user. Destructive shell already prompts the user via a hook when Jev is unsure.
-
-## Stop
-
-When the user ask is met, stop. Do not re-search, re-read, or spawn a "verify" subagent unless the user asked for a review (Bugbot / security-review).
-
-Authorize once in Cursor: Customize → Plugins → Jev → Configure, or run `node bin/cli.mjs set-key`, or call MCP `jev_auth`.
+Authorize: Customize → Plugins → Jev → Configure, or `node bin/cli.mjs set-key`, or MCP `jev_auth`.

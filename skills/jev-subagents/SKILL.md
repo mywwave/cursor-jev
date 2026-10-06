@@ -9,9 +9,17 @@ description: >-
 
 # Jev subagents
 
-Jev (`jev-latest`) is TypeSafe System One: send `state` plus typed questions, get structured answers in about 100ms. It does not generate code or tool calls.
+Jev is TypeSafe System One: send `state` plus typed questions, get structured answers. It does not generate code or tool calls.
 
 Use it to **cut hops**, not to add them. Prefer `jev_judge` / `jev_ask` over thinking out loud. Prefer doing the work inline over spawning Task. Never nest Task inside a subagent.
+
+## Fabric (workflow + pstack)
+
+On each user submit, hooks store a **workflow receipt** (`DIRECT` | `ASEO_ANALYSIS` | `PSTACK` | `RESEARCH` | `VERIFY` | `SHIP`). Mutating tools require a receipt for that conversation/generation.
+
+When receipt is `PSTACK` with `workflow_owner=pstack` (or the Task is already explicitly orchestrated), Jev does **not** rewrite `subagent_type`, suppress fan-out, or override models. Scope, shell, ready, and learning still apply.
+
+Do **not** invent progressive per-agent pstack manuals. `poteto-mode` / `poteto-agent` own method load when pstack is invoked.
 
 ## Auth
 
@@ -19,12 +27,15 @@ If tools fail with a missing key, call `jev_auth` or tell the user to open **Cus
 
 ## Tools
 
-- `jev_auth` — prompt the user to connect a TypeSafe API key
+- `jev_auth` — connect a TypeSafe API key
 - `jev_route({ task })` — pick a Cursor `subagent_type`
-- `jev_judge({ kind, state })` — preset gates: `scope`, `pick`, `ready`, `split`. Returns `{ action, answers, ... }`
+- `jev_judge({ kind, state })` — preset gates: `scope`, `pick`, `ready`, `split`
 - `jev_ask({ state, questions })` — arbitrary Choice / Score / Noul
 
-Hooks already: route/deny Task, deny out-of-scope Write, rerank Grep hits then deny off-list Read, ask the user on destructive shell, store the user ask in `~/.cursor/cursor-jev.sqlite`, and stop extra investigation when the result is enough.
+## Helpers
+
+- Context sources (catalog metadata only): `pickContextSources` in `src/workflow.mjs`
+- Evidence sources `{GSC,GA4,SERP,repo,orders,authority,none}`: `pickEvidenceSources` — does **not** decide create/delete page or pricing
 
 ## jev_judge kinds
 
@@ -37,7 +48,7 @@ Hooks already: route/deny Task, deny out-of-scope Write, rerank Grep hits then d
 
 - Never put secrets in `state`.
 - Never set a subagent `model` field to Jev.
-- If `pace` is `fast` or `needsDelegate` is low, do not launch Task.
+- If `pace` is `fast` or `needsDelegate` is low, do not launch Task (unless pstack owns the Task).
 - If Choice/Score confidence is low, ask the user instead of guessing.
 
 Live docs: https://docs.typesafe.ai/llms.txt
